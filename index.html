@@ -6,6 +6,7 @@
     <title>Text Highlighter</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
+        /* ... (your existing styles) ... */
         body {
             background-color: #333;
             color: white;
@@ -54,6 +55,9 @@
         #goButton {
             background-color: #222;
         }
+        #readAloudButton{
+          background-color: #222;
+        }
 
         .slider-container {
             display: flex;
@@ -94,17 +98,24 @@
             flex-grow: 1;
             transition: all 0.3s ease;
             line-height: 1.5;
+            user-select: text; /* Make the text selectable */
         }
+
 
         #output span {
             transition: color 0.3s ease;
+        }
+        /* Style for the currently spoken word */
+        .speaking {
+            background-color: yellow !important; /* Use !important to override other styles */
+            color: black !important;
         }
 
         @media (max-width: 768px) {
             .controls {
                 padding: 8px;
             }
-            
+
             .theme-button {
                 padding: 6px 8px;
             }
@@ -124,6 +135,7 @@
             <small id="saturation-value">100</small>
         </div>
         <button id="goButton" class="theme-button">[]</button>
+        <button id="readAloudButton" class="theme-button">🔊</button>
     </div>
     <div id="output"></div>
 
@@ -136,9 +148,14 @@
             textBackground: '#222'
         };
         let isUniformHighlight = false;
+        let speech = new SpeechSynthesisUtterance();
+        let currentSpokenWord = null;
+        let originalWord = ""; // Store the original word with punctuation
+
 
         const themes = {
-            default: {
+            /* ... (your existing themes) ... */
+             default: {
                 color1: '#ff6b6b',
                 color2: '#4ecdc4',
                 background: '#333',
@@ -164,43 +181,45 @@
             }
         };
 
-        function setTheme(themeName) {
+        /* ... (your existing functions: setTheme, setRandomTheme, findSyllables) ... */
+       function setTheme(themeName) {
             if (themes[themeName]) {
                 currentTheme = themes[themeName];
+            }  else {
+                // Handle custom theme (important for desaturation)
+              currentTheme = themeName;
             }
-            
+
             document.body.style.backgroundColor = currentTheme.background;
             document.getElementById('output').style.backgroundColor = currentTheme.textBackground;
-            
+
             if (currentText) {
                 updateHighlighting();
             }
         }
 
-        function setRandomTheme() {
-            const randomHue1 = Math.floor(Math.random() * 360);
-            const randomHue2 = (randomHue1 + Math.floor(Math.random() * 180)) % 360;
-            
-            // Create a very subtle background hue
-            const bgHue = (randomHue1 + randomHue2) / 2;
-            const bgColor = `hsl(${bgHue}, 15%, 15%)`;
-            const textBgColor = `hsl(${bgHue}, 15%, 10%)`;
-            
-            currentTheme = {
-                color1: `hsl(${randomHue1}, 80%, 70%)`,
-                color2: `hsl(${randomHue2}, 80%, 70%)`,
-                background: bgColor,
-                textBackground: textBgColor
-            };
-            
-            setTheme('custom');
-        }
+      function setRandomTheme() {
+        const randomHue1 = Math.floor(Math.random() * 360);
+        const randomHue2 = (randomHue1 + Math.floor(Math.random() * 180)) % 360;
+
+        const bgHue = (randomHue1 + randomHue2) / 2;
+        const bgColor = `hsl(${bgHue}, 15%, 15%)`;
+        const textBgColor = `hsl(${bgHue}, 15%, 10%)`;
+
+        // Pass the entire theme object to setTheme
+        setTheme({
+            color1: `hsl(${randomHue1}, 80%, 70%)`,
+            color2: `hsl(${randomHue2}, 80%, 70%)`,
+            background: bgColor,
+            textBackground: textBgColor
+        });
+    }
 
         function findSyllables(word) {
             const prefix = word.match(/^[^a-zA-Z]*/) || [''];
             const suffix = word.match(/[^a-zA-Z]*$/) || [''];
             const cleanWord = word.replace(/^[^a-zA-Z]*/, '').replace(/[^a-zA-Z]*$/, '');
-            
+
             if (!cleanWord) {
                 return [word];
             }
@@ -209,11 +228,11 @@
             let currentSyllable = '';
             let isVowel = false;
             let wasVowel = false;
-            
+
             for (let i = 0; i < cleanWord.length; i++) {
                 const char = cleanWord[i];
                 isVowel = /[aeiouy]/i.test(char);
-                
+
                 if (i === 0) {
                     currentSyllable += char;
                 } else {
@@ -224,10 +243,10 @@
                         currentSyllable += char;
                     }
                 }
-                
+
                 wasVowel = isVowel;
             }
-            
+
             if (currentSyllable) {
                 syllables.push(currentSyllable);
             }
@@ -235,38 +254,52 @@
             return [prefix[0], ...syllables, suffix[0]].filter(s => s);
         }
 
-        function updateHighlighting() {
-            const output = document.getElementById('output');
-            const saturationValue = document.getElementById('saturation').value;
-            const saturationDisplay = document.getElementById('saturation-value');
-            saturationDisplay.textContent = saturationValue;
-            
-            const words = currentText.split(/(\s+)/);
-            const coloredWords = words.map(word => {
-                if (!word.trim()) return word;
-                
-                const syllables = findSyllables(word);
-                return syllables.map((syllable, index) => {
-                    if (!syllable) return '';
-                    
-                    let color = isUniformHighlight ? currentTheme.color1 : 
-                               (index % 2 === 0 ? currentTheme.color1 : currentTheme.color2);
-                    
-                    if (saturationValue < 100) {
-                        const hsl = color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
-                        if (hsl) {
-                            color = `hsl(${hsl[1]}, ${saturationValue}%, ${hsl[3]}%)`;
-                        }
-                    }
-                    
-                    return `<span style="color: ${color}">${syllable}</span>`;
-                }).join('');
-            });
-            
-            output.innerHTML = coloredWords.join('');
+        function desaturateColor(color, saturationValue) {
+            const hsl = color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+            if (hsl) {
+                return `hsl(${hsl[1]}, ${saturationValue}%, ${hsl[3]}%)`;
+            }
+            return color; // Return original if not an HSL color
         }
 
+        function updateHighlighting() {
+          const output = document.getElementById('output');
+          const saturationValue = parseInt(document.getElementById('saturation').value, 10);  //Ensure it's a number
+          const saturationDisplay = document.getElementById('saturation-value');
+          saturationDisplay.textContent = saturationValue;
+
+          const words = currentText.split(/(\s+)/);
+
+          const coloredWords = words.map((word, wordIndex) => {
+            if (!word.trim()) return word;
+
+            const syllables = findSyllables(word);
+            // Wrap the *entire word* in a span, including punctuation.
+            let wordSpan = `<span id="word-${wordIndex}">`;
+
+            wordSpan += syllables.map((syllable, index) => {
+              if (!syllable) return '';
+
+              let color = isUniformHighlight ? currentTheme.color1 :
+                         (index % 2 === 0 ? currentTheme.color1 : currentTheme.color2);
+
+              // Apply desaturation to *all* colors, including random ones.
+              color = desaturateColor(color, saturationValue);
+
+              return `<span style="color: ${color}">${syllable}</span>`;
+            }).join('');
+
+            wordSpan += "</span>"; // Close the word span
+            return wordSpan;
+          });
+
+          output.innerHTML = coloredWords.join('');
+        }
+
+
+
         async function pasteAndHighlight() {
+           /* ... (your existing pasteAndHighlight function) ... */
             try {
                 const text = await navigator.clipboard.readText();
                 if (!text) {
@@ -280,32 +313,100 @@
             }
         }
 
+       function readAloud() {
+            if (!currentText) return;
+
+            if (speechSynthesis.speaking) {
+                speechSynthesis.cancel();
+                if (currentSpokenWord) {
+                    currentSpokenWord.classList.remove('speaking');
+                    currentSpokenWord = null;
+                }
+                originalWord = ""; // Reset originalWord
+                return;
+            }
+
+            speech.text = currentText;
+            speech.lang = 'en-US';
+
+           const voices = speechSynthesis.getVoices();
+            if (voices.length > 0) {
+              const bestVoice = voices.find(voice => voice.lang.startsWith('en') && voice.localService && voice.default) ||
+                                voices.find(voice => voice.lang.startsWith('en') && voice.localService) ||
+                                voices.find(voice => voice.lang.startsWith('en')) ||
+                                voices.find(voice => voice.localService && voice.default) ||
+                                voices.find(voice => voice.localService) ||
+                                voices[0];
+                if (bestVoice) {
+                    speech.voice = bestVoice;
+                }
+            }
+
+            speech.onboundary = (event) => {
+                if (currentSpokenWord) {
+                    currentSpokenWord.classList.remove('speaking');
+                }
+
+
+                if (event.name === 'word') {
+                    const charIndex = event.charIndex;
+                    let wordIndex = 0;
+                    let cumulativeLength = 0;
+                    const words = currentText.split(/(\s+)/);
+
+                    for (let i = 0; i < words.length; i++) {
+                        if (cumulativeLength <= charIndex && charIndex < cumulativeLength + words[i].length) {
+                            wordIndex = i;
+                            originalWord = words[i]; // Store the *full* word
+                            break;
+                        }
+                        cumulativeLength += words[i].length;
+                    }
+                    currentSpokenWord = document.getElementById(`word-${wordIndex}`);
+                    if (currentSpokenWord) {
+                        currentSpokenWord.classList.add('speaking');
+                    }
+
+                }
+            };
+             speech.onend = () => {
+                if(currentSpokenWord){
+                    currentSpokenWord.classList.remove('speaking');
+                    currentSpokenWord = null;
+                }
+                 originalWord = "";
+            }
+
+            speechSynthesis.speak(speech);
+        }
+
+
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
-            const output = document.getElementById('output');
-            
+            /* ... (your existing event listeners) ... */
+             const output = document.getElementById('output');
+
             output.addEventListener('mousedown', () => {
                 isUniformHighlight = true;
                 updateHighlighting();
             });
-            
+
             output.addEventListener('mouseup', () => {
                 isUniformHighlight = false;
                 updateHighlighting();
             });
-            
+
             output.addEventListener('mouseleave', () => {
                 if (isUniformHighlight) {
                     isUniformHighlight = false;
                     updateHighlighting();
                 }
             });
-            
+
             document.getElementById('saturation').addEventListener('input', updateHighlighting);
             document.getElementById('goButton').addEventListener('click', pasteAndHighlight);
-            
-            // Set initial welcome text
-            currentText = `TEXT HIGHLIGHTER
+            document.getElementById('readAloudButton').addEventListener('click', readAloud);
+           currentText = `TEXT HIGHLIGHTER
 
 This tool helps you visualize text with alternating colors.
 
@@ -322,6 +423,19 @@ TIPS:
 • Preserves all formatting and punctuation!`;
 
             setTheme('default');
+
+            speechSynthesis.onvoiceschanged = () => {
+                 if (!speech.voice && speechSynthesis.getVoices().length > 0) {
+                    const voices = speechSynthesis.getVoices();
+                     const bestVoice = voices.find(voice => voice.lang.startsWith('en') && voice.localService && voice.default) ||
+                                      voices.find(voice => voice.lang.startsWith('en') && voice.localService) ||
+                                      voices.find(voice => voice.lang.startsWith('en')) ||
+                                      voices.find(voice => voice.localService && voice.default) ||
+                                      voices.find(voice => voice.localService) ||
+                                      voices[0];
+                    if (bestVoice) speech.voice = bestVoice;
+                }
+            };
         });
     </script>
 </body>
