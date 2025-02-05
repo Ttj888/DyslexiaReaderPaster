@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Highlighter</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #333;
+            color: white;
+            font-family: 'Press Start 2P', monospace;
+            margin: 0;
+            padding: 10px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.3s ease;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            background-color: #222;
+            font-size: 10px;
+            white-space: nowrap;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .controls::-webkit-scrollbar {
+            display: none;
+        }
+
+        .theme-button {
+            background-color: #222;
+            color: white;
+            border: 1px solid #666;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 10px;
+            flex-shrink: 0;
+            image-rendering: pixelated;
+        }
+
+        .theme-button:hover {
+            background-color: #444;
+        }
+
+        #goButton {
+            background-color: #222;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+            color: #fff;
+        }
+
+        #saturation {
+            width: 60px;
+            height: 4px;
+            -webkit-appearance: none;
+            background: #666;
+            outline: none;
+        }
+
+        #saturation::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 8px;
+            height: 8px;
+            background: #fff;
+            cursor: pointer;
+            image-rendering: pixelated;
+        }
+
+        #saturation-value {
+            min-width: 3em;
+            color: #fff;
+        }
+
+        #output {
+            margin-top: 20px;
+            background-color: #222;
+            padding: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            flex-grow: 1;
+            transition: all 0.3s ease;
+            line-height: 1.5;
+        }
+
+        #output span {
+            transition: color 0.3s ease;
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                padding: 8px;
+            }
+            
+            .theme-button {
+                padding: 6px 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <button class="theme-button" onclick="setTheme('dyslexia1')">D1</button>
+        <button class="theme-button" onclick="setTheme('dyslexia2')">D2</button>
+        <button class="theme-button" onclick="setTheme('dyslexia3')">D3</button>
+        <button class="theme-button" onclick="setTheme('default')">DEF</button>
+        <button class="theme-button" onclick="setRandomTheme()">▼</button>
+        <div class="slider-container">
+            <small>INT</small>
+            <input type="range" id="saturation" min="0" max="100" value="100">
+            <small id="saturation-value">100</small>
+        </div>
+        <button id="goButton" class="theme-button">[]</button>
+    </div>
+    <div id="output"></div>
+
+    <script>
+        let currentText = '';
+        let currentTheme = {
+            color1: '#ff6b6b',
+            color2: '#4ecdc4',
+            background: '#333',
+            textBackground: '#222'
+        };
+        let isUniformHighlight = false;
+
+        const themes = {
+            default: {
+                color1: '#ff6b6b',
+                color2: '#4ecdc4',
+                background: '#333',
+                textBackground: '#222'
+            },
+            dyslexia1: {
+                color1: '#ffdb4d',
+                color2: '#b3e6ff',
+                background: '#333',
+                textBackground: '#222'
+            },
+            dyslexia2: {
+                color1: '#ff9999',
+                color2: '#99ff99',
+                background: '#333',
+                textBackground: '#222'
+            },
+            dyslexia3: {
+                color1: '#ffb366',
+                color2: '#c2d1f0',
+                background: '#333',
+                textBackground: '#222'
+            }
+        };
+
+        function setTheme(themeName) {
+            if (themes[themeName]) {
+                currentTheme = themes[themeName];
+            }
+            
+            document.body.style.backgroundColor = currentTheme.background;
+            document.getElementById('output').style.backgroundColor = currentTheme.textBackground;
+            
+            if (currentText) {
+                updateHighlighting();
+            }
+        }
+
+        function setRandomTheme() {
+            const randomHue1 = Math.floor(Math.random() * 360);
+            const randomHue2 = (randomHue1 + Math.floor(Math.random() * 180)) % 360;
+            
+            // Create a very subtle background hue
+            const bgHue = (randomHue1 + randomHue2) / 2;
+            const bgColor = `hsl(${bgHue}, 15%, 15%)`;
+            const textBgColor = `hsl(${bgHue}, 15%, 10%)`;
+            
+            currentTheme = {
+                color1: `hsl(${randomHue1}, 80%, 70%)`,
+                color2: `hsl(${randomHue2}, 80%, 70%)`,
+                background: bgColor,
+                textBackground: textBgColor
+            };
+            
+            setTheme('custom');
+        }
+
+        function findSyllables(word) {
+            const prefix = word.match(/^[^a-zA-Z]*/) || [''];
+            const suffix = word.match(/[^a-zA-Z]*$/) || [''];
+            const cleanWord = word.replace(/^[^a-zA-Z]*/, '').replace(/[^a-zA-Z]*$/, '');
+            
+            if (!cleanWord) {
+                return [word];
+            }
+
+            const syllables = [];
+            let currentSyllable = '';
+            let isVowel = false;
+            let wasVowel = false;
+            
+            for (let i = 0; i < cleanWord.length; i++) {
+                const char = cleanWord[i];
+                isVowel = /[aeiouy]/i.test(char);
+                
+                if (i === 0) {
+                    currentSyllable += char;
+                } else {
+                    if (isVowel && !wasVowel) {
+                        syllables.push(currentSyllable);
+                        currentSyllable = char;
+                    } else {
+                        currentSyllable += char;
+                    }
+                }
+                
+                wasVowel = isVowel;
+            }
+            
+            if (currentSyllable) {
+                syllables.push(currentSyllable);
+            }
+
+            return [prefix[0], ...syllables, suffix[0]].filter(s => s);
+        }
+
+        function updateHighlighting() {
+            const output = document.getElementById('output');
+            const saturationValue = document.getElementById('saturation').value;
+            const saturationDisplay = document.getElementById('saturation-value');
+            saturationDisplay.textContent = saturationValue;
+            
+            const words = currentText.split(/(\s+)/);
+            const coloredWords = words.map(word => {
+                if (!word.trim()) return word;
+                
+                const syllables = findSyllables(word);
+                return syllables.map((syllable, index) => {
+                    if (!syllable) return '';
+                    
+                    let color = isUniformHighlight ? currentTheme.color1 : 
+                               (index % 2 === 0 ? currentTheme.color1 : currentTheme.color2);
+                    
+                    if (saturationValue < 100) {
+                        const hsl = color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+                        if (hsl) {
+                            color = `hsl(${hsl[1]}, ${saturationValue}%, ${hsl[3]}%)`;
+                        }
+                    }
+                    
+                    return `<span style="color: ${color}">${syllable}</span>`;
+                }).join('');
+            });
+            
+            output.innerHTML = coloredWords.join('');
+        }
+
+        async function pasteAndHighlight() {
+            try {
+                const text = await navigator.clipboard.readText();
+                if (!text) {
+                    document.getElementById('output').innerHTML = '<span style="color: #ff6b6b">No text in clipboard. Copy some text first!</span>';
+                    return;
+                }
+                currentText = text;
+                updateHighlighting();
+            } catch (err) {
+                document.getElementById('output').innerHTML = '<span style="color: #ff6b6b">Could not access clipboard. Please check permissions.</span>';
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            const output = document.getElementById('output');
+            
+            output.addEventListener('mousedown', () => {
+                isUniformHighlight = true;
+                updateHighlighting();
+            });
+            
+            output.addEventListener('mouseup', () => {
+                isUniformHighlight = false;
+                updateHighlighting();
+            });
+            
+            output.addEventListener('mouseleave', () => {
+                if (isUniformHighlight) {
+                    isUniformHighlight = false;
+                    updateHighlighting();
+                }
+            });
+            
+            document.getElementById('saturation').addEventListener('input', updateHighlighting);
+            document.getElementById('goButton').addEventListener('click', pasteAndHighlight);
+            
+            // Set initial welcome text
+            currentText = `TEXT HIGHLIGHTER
+
+This tool helps you visualize text with alternating colors.
+
+HOW TO USE:
+1. Copy any text you want to colorize
+2. Click the [] button to paste and apply colors
+3. Try different themes (D1, D2, D3, DEF)
+4. Adjust intensity with the slider
+5. Click and hold anywhere to use a single color
+
+TIPS:
+• D1, D2, D3 are reading-friendly color schemes
+• The ▼ button generates random colors
+• Preserves all formatting and punctuation!`;
+
+            setTheme('default');
+        });
+    </script>
+</body>
+</html>
